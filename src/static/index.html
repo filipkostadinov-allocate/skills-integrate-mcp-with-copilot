@@ -13,6 +13,24 @@
     </header>
 
     <main>
+      <!-- GitHub Issue Search Section -->
+      <section id="github-search-container">
+        <h3>GitHub Issue Search</h3>
+        <div class="search-form">
+          <input type="text" id="issue-search-query" placeholder="Search for GitHub issues..." />
+          <select id="search-sort">
+            <option value="created">Created Date</option>
+            <option value="updated">Updated Date</option>
+            <option value="comments">Comments</option>
+            <option value="reactions">Likes/Reactions</option>
+          </select>
+          <button id="search-issues-btn">Search</button>
+        </div>
+        <div id="github-issues-list">
+          <!-- Search results will be displayed here -->
+        </div>
+      </section>
+
       <section id="activities-container">
         <h3>Available Activities</h3>
         <div id="activities-list">

@@ -3,6 +3,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  const issueSearchBtn = document.getElementById("search-issues-btn");
+  const githubIssuesList = document.getElementById("github-issues-list");
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -109,6 +111,70 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("Error unregistering:", error);
     }
   }
+
+  // GitHub Issue Search functionality
+  issueSearchBtn.addEventListener("click", async () => {
+    const searchQuery = document.getElementById("issue-search-query").value.trim();
+    const sortBy = document.getElementById("search-sort").value;
+    
+    if (!searchQuery) {
+      githubIssuesList.innerHTML = "<p class='error'>Please enter a search query</p>";
+      return;
+    }
+
+    githubIssuesList.innerHTML = "<p>Searching for issues...</p>";
+    
+    try {
+      // Build the search query - we'll search in title, body and comments
+      let q = searchQuery;
+      
+      // Call our backend endpoint that will use the MCP GitHub server
+      const response = await fetch(`/github/search-issues?q=${encodeURIComponent(q)}&sort=${sortBy}`);
+      const results = await response.json();
+      
+      if (results.items && results.items.length > 0) {
+        githubIssuesList.innerHTML = `<p>Found ${results.total_count} issues. Showing ${results.items.length}:</p>`;
+        
+        const issuesContainer = document.createElement("div");
+        issuesContainer.className = "issues-container";
+        
+        results.items.forEach(issue => {
+          const issueCard = document.createElement("div");
+          issueCard.className = "issue-card";
+          
+          // Format dates
+          const createdDate = new Date(issue.created_at).toLocaleDateString();
+          const updatedDate = new Date(issue.updated_at).toLocaleDateString();
+          
+          // Get reactions summary if available
+          const reactions = issue.reactions || {};
+          const totalReactions = (reactions.total_count || 0);
+          
+          issueCard.innerHTML = `
+            <h4><a href="${issue.html_url}" target="_blank">${issue.title}</a></h4>
+            <p class="issue-meta">
+              #${issue.number} opened on ${createdDate} by 
+              <a href="${issue.user.html_url}" target="_blank">@${issue.user.login}</a>
+            </p>
+            <p class="issue-stats">
+              <span title="Comments"><span class="icon">💬</span> ${issue.comments}</span>
+              <span title="Reactions"><span class="icon">👍</span> ${totalReactions}</span>
+            </p>
+            <p class="issue-body">${issue.body ? issue.body.substring(0, 200) + '...' : 'No description'}</p>
+          `;
+          
+          issuesContainer.appendChild(issueCard);
+        });
+        
+        githubIssuesList.appendChild(issuesContainer);
+      } else {
+        githubIssuesList.innerHTML = "<p>No issues found matching your search criteria.</p>";
+      }
+    } catch (error) {
+      githubIssuesList.innerHTML = "<p class='error'>Error searching for issues. Please try again later.</p>";
+      console.error("Error searching GitHub issues:", error);
+    }
+  });
 
   // Handle form submission
   signupForm.addEventListener("submit", async (event) => {

@@ -9,7 +9,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
+import json
+import subprocess
 from pathlib import Path
+import httpx
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
@@ -130,3 +133,82 @@ def unregister_from_activity(activity_name: str, email: str):
     # Remove student
     activity["participants"].remove(email)
     return {"message": f"Unregistered {email} from {activity_name}"}
+
+
+@app.get("/github/search-issues")
+async def search_github_issues(q: str, sort: str = "created"):
+    """
+    Search for GitHub issues using the MCP GitHub server
+    
+    Parameters:
+    - q: The search query
+    - sort: Sort criteria (created, updated, comments, reactions)
+    """
+    try:
+        # Construct a more comprehensive search query to include title, body, and comments
+        search_query = q
+        
+        # Map frontend sort values to GitHub API sort parameters
+        sort_mapping = {
+            "created": "created",
+            "updated": "updated",
+            "comments": "comments",
+            "reactions": "reactions"
+        }
+        
+        github_sort = sort_mapping.get(sort, "created")
+        
+        # Create MCP request payload - structure based on MCP protocol
+        mcp_request = {
+            "version": "0.1",
+            "action": "search_issues",
+            "parameters": {
+                "q": search_query,
+                "sort": github_sort,
+                "order": "desc",
+                "per_page": 10
+            }
+        }
+        
+        # Send request to MCP GitHub server using subprocess
+        # This approach uses the docker container defined in mcp.json
+        try:
+            # Use httpx to communicate with the locally running MCP server
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "http://localhost:8912/github",  # MCP server endpoint
+                    json=mcp_request,
+                    timeout=30.0
+                )
+                
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    raise HTTPException(
+                        status_code=response.status_code,
+                        detail=f"GitHub MCP server error: {response.text}"
+                    )
+                
+        except httpx.RequestError:
+            # Fallback: Use subprocess to communicate with MCP docker container directly
+            process = subprocess.Popen(
+                ["docker", "run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN", 
+                 "ghcr.io/github/github-mcp-server:v0.1.1"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            
+            # Send MCP request to stdin
+            stdout, stderr = process.communicate(json.dumps(mcp_request).encode())
+            
+            if process.returncode != 0:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"GitHub MCP server error: {stderr.decode()}"
+                )
+                
+            return json.loads(stdout.decode())
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error searching GitHub issues: {str(e)}")
